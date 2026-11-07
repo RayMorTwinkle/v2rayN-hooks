@@ -4,6 +4,7 @@ public class StatusBarViewModel : MyReactiveObject
 {
     private static readonly Lazy<StatusBarViewModel> _instance = new(() => new(null));
     public static StatusBarViewModel Instance => _instance.Value;
+    private bool _isSyncingExternalConfig;
 
     #region ObservableCollection
 
@@ -223,6 +224,11 @@ public class StatusBarViewModel : MyReactiveObject
             .ObserveOn(RxSchedulers.MainThreadScheduler)
             .Subscribe(async result => await SetListenerType(result));
 
+        AppEvents.ExternalConfigSyncedRequested
+            .AsObservable()
+            .ObserveOn(RxSchedulers.MainThreadScheduler)
+            .Subscribe(async _ => await SyncStateFromConfigAsync());
+
         #endregion AppEvents
 
         _ = Init();
@@ -233,7 +239,7 @@ public class StatusBarViewModel : MyReactiveObject
         await ConfigHandler.InitBuiltinRouting(_config);
         await RefreshRoutingsMenu();
         await InboundDisplayStatus();
-        await ChangeSystemProxyAsync(_config.SystemProxyItem.SysProxyType, true);
+        await SyncStateFromConfigAsync();
     }
 
     public void InitUpdateView(Func<EViewAction, object?, Task<bool>>? updateView)
@@ -455,6 +461,10 @@ public class StatusBarViewModel : MyReactiveObject
         {
             return;
         }
+        if (_isSyncingExternalConfig)
+        {
+            return;
+        }
         if (_config.SystemProxyItem.SysProxyType == (ESysProxyType)SystemProxySelected)
         {
             return;
@@ -464,6 +474,10 @@ public class StatusBarViewModel : MyReactiveObject
 
     private async Task DoEnableTun(bool c)
     {
+        if (_isSyncingExternalConfig)
+        {
+            return;
+        }
         if (_config.TunModeItem.EnableTun == EnableTun)
         {
             return;
@@ -512,6 +526,29 @@ public class StatusBarViewModel : MyReactiveObject
     }
 
     #endregion System proxy and Routings
+
+    private async Task SyncStateFromConfigAsync()
+    {
+        var type = _config.SystemProxyItem.SysProxyType;
+        _isSyncingExternalConfig = true;
+        try
+        {
+            SystemProxySelected = (int)type;
+            BlSystemProxyClear = type == ESysProxyType.ForcedClear;
+            BlSystemProxySet = type == ESysProxyType.ForcedChange;
+            BlSystemProxyNothing = type == ESysProxyType.Unchanged;
+            BlSystemProxyPac = type == ESysProxyType.Pac;
+
+            EnableTun = _config.TunModeItem.EnableTun && AllowEnableTun();
+            await RefreshServersBiz();
+        }
+        finally
+        {
+            _isSyncingExternalConfig = false;
+        }
+
+        await ChangeSystemProxyAsync(type, true);
+    }
 
     #region UI
 

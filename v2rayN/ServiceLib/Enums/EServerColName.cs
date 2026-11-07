@@ -10,6 +10,7 @@ public enum EServerColName
     Network,
     StreamSecurity,
     SubRemarks,
+    GeoLocation,
     DelayVal,
     SpeedVal,
 

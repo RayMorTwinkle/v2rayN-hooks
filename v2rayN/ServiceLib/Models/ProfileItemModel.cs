@@ -13,6 +13,8 @@ public class ProfileItemModel : ReactiveObject
     public string StreamSecurity { get; set; }
     public string Subid { get; set; }
     public string SubRemarks { get; set; }
+    public string GeoLocation { get; set; }
+    public string GeoIP { get; set; }
     public int Sort { get; set; }
 
     [Reactive]

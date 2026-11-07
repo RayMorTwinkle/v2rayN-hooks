@@ -79,12 +79,26 @@ public sealed class AppManager
         SQLiteHelper.Instance.CreateTable<ServerStatItem>();
         SQLiteHelper.Instance.CreateTable<RoutingItem>();
         SQLiteHelper.Instance.CreateTable<ProfileExItem>();
+        EnsureProfileExColumns();
         SQLiteHelper.Instance.CreateTable<DNSItem>();
         SQLiteHelper.Instance.CreateTable<FullConfigTemplateItem>();
 #pragma warning disable CS0618
         SQLiteHelper.Instance.CreateTable<ProfileGroupItem>();
 #pragma warning restore CS0618
         return true;
+    }
+
+    private static void EnsureProfileExColumns()
+    {
+        // sqlite-net CreateTable does not add new columns to an existing table.
+        Task.Run(async () =>
+        {
+            try { await SQLiteHelper.Instance.ExecuteAsync("alter table ProfileExItem add column GeoIP TEXT"); } catch { }
+            try { await SQLiteHelper.Instance.ExecuteAsync("alter table ProfileExItem add column GeoCountry TEXT"); } catch { }
+            try { await SQLiteHelper.Instance.ExecuteAsync("alter table ProfileExItem add column GeoRegion TEXT"); } catch { }
+            try { await SQLiteHelper.Instance.ExecuteAsync("alter table ProfileExItem add column GeoCity TEXT"); } catch { }
+            try { await SQLiteHelper.Instance.ExecuteAsync("alter table ProfileExItem add column GeoIsp TEXT"); } catch { }
+        }).Wait();
     }
 
     public bool InitComponents()

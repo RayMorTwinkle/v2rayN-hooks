@@ -140,6 +140,8 @@
                             x:Name="menuSpeedServer"
                             Header="{x:Static resx:ResUI.menuSpeedServer}"
                             InputGesture="Ctrl+T" />
+                        <MenuItem x:Name="menuGeoServer" Header="Geo Detect (Selected)" />
+                        <MenuItem x:Name="menuGeoAllServer" Header="Geo Detect (All)" />
                         <MenuItem x:Name="menuSortServerResult" Header="{x:Static resx:ResUI.menuSortServerResult}" />
                         <Separator />
                         <MenuItem
@@ -254,6 +256,11 @@
                         Binding="{Binding SubRemarks}"
                         Header="{x:Static resx:ResUI.LvSubscription}"
                         Tag="SubRemarks" />
+                    <DataGridTextColumn
+                        Width="130"
+                        Binding="{Binding GeoLocation}"
+                        Header="Location"
+                        Tag="GeoLocation" />
                     <DataGridTemplateColumn SortMemberPath="Delay" Tag="DelayVal">
                         <DataGridTemplateColumn.Header>
                             <TextBlock Text="{x:Static resx:ResUI.LvTestDelay}" />

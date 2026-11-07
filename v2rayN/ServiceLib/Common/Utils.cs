@@ -8,6 +8,7 @@ namespace ServiceLib.Common;
 public class Utils
 {
     private static readonly string _tag = "Utils";
+    private static string? _startupPath;
 
     #region Conversion Functions
 
@@ -957,12 +958,65 @@ public class Utils
 
     public static string StartupPath()
     {
-        if (Environment.GetEnvironmentVariable(Global.LocalAppData) == "1")
+        if (_startupPath.IsNotEmpty())
         {
-            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "v2rayN");
+            return _startupPath!;
         }
 
-        return GetBaseDirectory();
+        if (Environment.GetEnvironmentVariable(Global.LocalAppData) == "1")
+        {
+            var basePath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var startupPath = Path.Combine(basePath, Global.LocalAppDataFolderName);
+
+            if (!Directory.Exists(startupPath))
+            {
+                var legacyPath = Path.Combine(basePath, Global.LocalAppDataLegacyFolderName);
+                TryMigrateLegacyLocalAppData(legacyPath, startupPath);
+            }
+
+            Directory.CreateDirectory(startupPath);
+            _startupPath = startupPath;
+            return startupPath;
+        }
+
+        _startupPath = GetBaseDirectory();
+        return _startupPath;
+    }
+
+    private static void TryMigrateLegacyLocalAppData(string sourcePath, string targetPath)
+    {
+        try
+        {
+            if (!Directory.Exists(sourcePath) || Directory.Exists(targetPath))
+            {
+                return;
+            }
+
+            Directory.CreateDirectory(targetPath);
+
+            foreach (var dirPath in Directory.GetDirectories(sourcePath, "*", SearchOption.AllDirectories))
+            {
+                var relativePath = Path.GetRelativePath(sourcePath, dirPath);
+                var destinationDir = Path.Combine(targetPath, relativePath);
+                Directory.CreateDirectory(destinationDir);
+            }
+
+            foreach (var filePath in Directory.GetFiles(sourcePath, "*", SearchOption.AllDirectories))
+            {
+                var relativePath = Path.GetRelativePath(sourcePath, filePath);
+                var destinationPath = Path.Combine(targetPath, relativePath);
+                var destinationDir = Path.GetDirectoryName(destinationPath);
+                if (!destinationDir.IsNullOrEmpty())
+                {
+                    Directory.CreateDirectory(destinationDir);
+                }
+                File.Copy(filePath, destinationPath, overwrite: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logging.SaveLog(_tag, ex);
+        }
     }
 
     public static string GetTempPath(string filename = "")

@@ -77,6 +77,8 @@ public class Global
     public const string RebootAs = "rebootas";
     public const string AvaAssets = "avares://v2rayN/Assets/";
     public const string LocalAppData = "V2RAYN_LOCAL_APPLICATION_DATA_V2";
+    public const string LocalAppDataFolderName = "v2ray-mac";
+    public const string LocalAppDataLegacyFolderName = "v2rayN";
     public const string V2RayLocalAsset = "V2RAY_LOCATION_ASSET";
     public const string XrayLocalAsset = "XRAY_LOCATION_ASSET";
     public const string XrayLocalCert = "XRAY_LOCATION_CERT";

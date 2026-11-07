@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+export V2RAYN_LOCAL_APPLICATION_DATA_V2="${V2RAYN_LOCAL_APPLICATION_DATA_V2:-1}"
+
+exec dotnet run --project "$ROOT_DIR/v2rayN.Cli/v2rayN.Cli.csproj" -- "$@"

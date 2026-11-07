@@ -4,6 +4,10 @@ namespace ServiceLib.ViewModels;
 
 public class MainWindowViewModel : MyReactiveObject
 {
+    private const int DefaultExternalSyncIntervalSeconds = 10;
+    private DateTime _lastConfigWriteUtc = DateTime.MinValue;
+    private readonly int _externalSyncIntervalSeconds;
+
     #region Menu
 
     //servers
@@ -53,6 +57,7 @@ public class MainWindowViewModel : MyReactiveObject
     public ReactiveCommand<Unit, Unit> RegionalPresetIranCmd { get; }
 
     public ReactiveCommand<Unit, Unit> ReloadCmd { get; }
+    public ReactiveCommand<Unit, Unit> SyncExternalConfigCmd { get; }
 
     [Reactive]
     public bool BlReloadEnabled { get; set; }
@@ -73,6 +78,7 @@ public class MainWindowViewModel : MyReactiveObject
     {
         _config = AppManager.Instance.Config;
         _updateView = updateView;
+        _externalSyncIntervalSeconds = GetExternalSyncIntervalSeconds();
         BlIsWindows = Utils.IsWindows();
 
         #region WhenAnyValue && ReactiveCommand
@@ -211,6 +217,12 @@ public class MainWindowViewModel : MyReactiveObject
         {
             await Reload();
         });
+        SyncExternalConfigCmd = ReactiveCommand.CreateFromTask(async () =>
+        {
+            await SyncExternalConfigFromDisk(force: true);
+            await SyncProfileExFromDb(force: true);
+            NoticeManager.Instance.SendMessageEx($"External sync completed (config + profile ex, interval: {_externalSyncIntervalSeconds}s).");
+        });
 
         RegionalPresetDefaultCmd = ReactiveCommand.CreateFromTask(async () =>
         {
@@ -274,6 +286,7 @@ public class MainWindowViewModel : MyReactiveObject
         await RefreshServers();
 
         await Reload();
+        _ = WatchExternalConfigChanges();
     }
 
     #endregion Init
@@ -319,6 +332,90 @@ public class MainWindowViewModel : MyReactiveObject
     }
 
     #endregion Actions
+
+    private async Task WatchExternalConfigChanges()
+    {
+        while (true)
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(_externalSyncIntervalSeconds));
+                await SyncExternalConfigFromDisk(force: false);
+                await SyncProfileExFromDb(force: false);
+            }
+            catch (Exception ex)
+            {
+                Logging.SaveLog("WatchExternalConfigChanges", ex);
+            }
+        }
+    }
+
+    private async Task SyncProfileExFromDb(bool force)
+    {
+        var changed = await ProfileExManager.Instance.ReloadFromDbIfChanged(force);
+        if (!changed)
+        {
+            return;
+        }
+
+        AppEvents.ProfilesRefreshRequested.Publish();
+        AppEvents.ExternalConfigSyncedRequested.Publish();
+    }
+
+    private async Task SyncExternalConfigFromDisk(bool force)
+    {
+        var configPath = Utils.GetConfigPath(Global.ConfigFileName);
+        if (!File.Exists(configPath))
+        {
+            return;
+        }
+
+        var writeTime = File.GetLastWriteTimeUtc(configPath);
+        if (!force && writeTime <= _lastConfigWriteUtc)
+        {
+            return;
+        }
+        _lastConfigWriteUtc = writeTime;
+
+        var latest = ConfigHandler.LoadConfig();
+        if (latest == null)
+        {
+            return;
+        }
+
+        var indexChanged = !string.Equals(latest.IndexId, _config.IndexId, StringComparison.Ordinal);
+        var subChanged = !string.Equals(latest.SubIndexId, _config.SubIndexId, StringComparison.Ordinal);
+        var tunChanged = latest.TunModeItem.EnableTun != _config.TunModeItem.EnableTun;
+        var proxyChanged = latest.SystemProxyItem.SysProxyType != _config.SystemProxyItem.SysProxyType;
+
+        _config.IndexId = latest.IndexId;
+        _config.SubIndexId = latest.SubIndexId;
+        _config.TunModeItem.EnableTun = latest.TunModeItem.EnableTun;
+        _config.SystemProxyItem.SysProxyType = latest.SystemProxyItem.SysProxyType;
+
+        RefreshSubscriptions();
+        await RefreshServers();
+        AppEvents.ExternalConfigSyncedRequested.Publish();
+
+        if (indexChanged || tunChanged || proxyChanged)
+        {
+            await Reload();
+        }
+        else if (subChanged)
+        {
+            AppEvents.ProfilesRefreshRequested.Publish();
+        }
+    }
+
+    private static int GetExternalSyncIntervalSeconds()
+    {
+        var raw = Environment.GetEnvironmentVariable("V2RAYN_GUI_SYNC_INTERVAL_SECONDS");
+        if (int.TryParse(raw, out var seconds))
+        {
+            return Math.Clamp(seconds, 1, 3600);
+        }
+        return DefaultExternalSyncIntervalSeconds;
+    }
 
     #region Servers && Groups
 

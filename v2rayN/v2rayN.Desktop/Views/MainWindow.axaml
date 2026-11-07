@@ -97,6 +97,7 @@
                     </MenuItem>
 
                     <MenuItem x:Name="menuReload" Header="{x:Static resx:ResUI.menuReload}" />
+                    <MenuItem x:Name="menuSyncRefresh" Header="Sync Refresh" />
 
                     <MenuItem x:Name="menuPromotion" Header="{x:Static resx:ResUI.menuPromotion}" />
 

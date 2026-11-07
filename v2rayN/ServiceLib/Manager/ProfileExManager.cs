@@ -7,6 +7,7 @@ public class ProfileExManager
     private static readonly Lazy<ProfileExManager> _instance = new(() => new());
     private ConcurrentBag<ProfileExItem> _lstProfileEx = [];
     private readonly Queue<string> _queIndexIds = new();
+    private string _lastDbSignature = string.Empty;
     public static ProfileExManager Instance => _instance.Value;
     private static readonly string _tag = "ProfileExHandler";
 
@@ -30,6 +31,7 @@ public class ProfileExManager
         await SQLiteHelper.Instance.ExecuteAsync($"delete from ProfileExItem where indexId not in ( select indexId from ProfileItem )");
 
         _lstProfileEx = new(await SQLiteHelper.Instance.TableAsync<ProfileExItem>().ToListAsync());
+        _lastDbSignature = await GetDbSignatureAsync();
     }
 
     private void IndexIdEnqueue(string indexId)
@@ -96,7 +98,12 @@ public class ProfileExManager
             Delay = 0,
             Speed = 0,
             Sort = 0,
-            Message = string.Empty
+            Message = string.Empty,
+            GeoIP = string.Empty,
+            GeoCountry = string.Empty,
+            GeoRegion = string.Empty,
+            GeoCity = string.Empty,
+            GeoIsp = string.Empty
         };
         _lstProfileEx.Add(profileEx);
         IndexIdEnqueue(indexId);
@@ -119,6 +126,7 @@ public class ProfileExManager
         try
         {
             await SaveQueueIndexIds();
+            _lastDbSignature = await GetDbSignatureAsync();
         }
         catch (Exception ex)
         {
@@ -175,5 +183,80 @@ public class ProfileExManager
             return 0;
         }
         return _lstProfileEx.Max(t => t == null ? 0 : t.Sort);
+    }
+
+    public async Task ReloadFromDb()
+    {
+        if (_queIndexIds.Count > 0)
+        {
+            await SaveQueueIndexIds();
+        }
+        await InitData();
+    }
+
+    public async Task<bool> ReloadFromDbIfChanged(bool force)
+    {
+        if (_queIndexIds.Count > 0)
+        {
+            await SaveQueueIndexIds();
+        }
+
+        var latestSignature = await GetDbSignatureAsync();
+        if (!force && latestSignature == _lastDbSignature)
+        {
+            return false;
+        }
+
+        await InitData();
+        return true;
+    }
+
+    public void SetGeoInfo(string indexId, IpApiGeoResponse? geo)
+    {
+        var profileEx = GetProfileExItem(indexId);
+        profileEx.GeoIP = geo?.Query ?? string.Empty;
+
+        if (geo == null)
+        {
+            profileEx.GeoCountry = "N/A";
+            profileEx.GeoRegion = string.Empty;
+            profileEx.GeoCity = string.Empty;
+            profileEx.GeoIsp = string.Empty;
+        }
+        else if (!string.Equals(geo.Status, "success", StringComparison.OrdinalIgnoreCase))
+        {
+            profileEx.GeoCountry = $"Fail:{geo.Message ?? geo.Status ?? "unknown"}";
+            profileEx.GeoRegion = string.Empty;
+            profileEx.GeoCity = string.Empty;
+            profileEx.GeoIsp = string.Empty;
+        }
+        else
+        {
+            profileEx.GeoCountry = geo.Country ?? string.Empty;
+            profileEx.GeoRegion = geo.RegionName ?? string.Empty;
+            profileEx.GeoCity = geo.City ?? string.Empty;
+            profileEx.GeoIsp = geo.Isp ?? string.Empty;
+        }
+
+        IndexIdEnqueue(indexId);
+    }
+
+    private async Task<string> GetDbSignatureAsync()
+    {
+        try
+        {
+            var rows = await SQLiteHelper.Instance.QueryAsync<ProfileExSignatureRow>(
+                "select printf('%d:%d', ifnull(max(rowid), 0), count(1)) as Signature from ProfileExItem");
+            return rows.FirstOrDefault()?.Signature ?? "0:0";
+        }
+        catch
+        {
+            return "0:0";
+        }
+    }
+
+    private sealed class ProfileExSignatureRow
+    {
+        public string Signature { get; set; } = "0:0";
     }
 }

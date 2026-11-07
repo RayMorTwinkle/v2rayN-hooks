@@ -61,6 +61,8 @@ public class ProfilesViewModel : MyReactiveObject
     public ReactiveCommand<Unit, Unit> TcpingServerCmd { get; }
     public ReactiveCommand<Unit, Unit> RealPingServerCmd { get; }
     public ReactiveCommand<Unit, Unit> SpeedServerCmd { get; }
+    public ReactiveCommand<Unit, Unit> GeoServerCmd { get; }
+    public ReactiveCommand<Unit, Unit> GeoAllServerCmd { get; }
     public ReactiveCommand<Unit, Unit> SortServerResultCmd { get; }
     public ReactiveCommand<Unit, Unit> RemoveInvalidServerResultCmd { get; }
     public ReactiveCommand<Unit, Unit> FastRealPingCmd { get; }
@@ -182,6 +184,14 @@ public class ProfilesViewModel : MyReactiveObject
         {
             await ServerSpeedtest(ESpeedActionType.Speedtest);
         }, canEditRemove);
+        GeoServerCmd = ReactiveCommand.CreateFromTask(async () =>
+        {
+            await ServerGeoDetect(false);
+        }, canEditRemove);
+        GeoAllServerCmd = ReactiveCommand.CreateFromTask(async () =>
+        {
+            await ServerGeoDetect(true);
+        });
         SortServerResultCmd = ReactiveCommand.CreateFromTask(async () =>
         {
             await SortServer(EServerColName.DelayVal.ToString());
@@ -421,6 +431,8 @@ public class ProfilesViewModel : MyReactiveObject
                         StreamSecurity = t.StreamSecurity,
                         Subid = t.Subid,
                         SubRemarks = t.SubRemarks,
+                        GeoLocation = $"{t33?.GeoCountry ?? string.Empty}{(t33?.GeoCity.IsNotEmpty() == true ? "/" + t33?.GeoCity : string.Empty)}",
+                        GeoIP = t33?.GeoIP ?? string.Empty,
                         IsActive = t.IndexId == _config.IndexId,
                         Sort = t33?.Sort ?? 0,
                         Delay = t33?.Delay ?? 0,
@@ -744,6 +756,35 @@ public class ProfilesViewModel : MyReactiveObject
     public void ServerSpeedtestStop()
     {
         _speedtestService?.ExitLoop();
+    }
+
+    public async Task ServerGeoDetect(bool all)
+    {
+        List<ProfileItem>? targets;
+        if (all)
+        {
+            targets = JsonUtils.Deserialize<List<ProfileItem>>(JsonUtils.Serialize(ProfileItems?.OrderBy(t => t.Sort)));
+        }
+        else
+        {
+            targets = await GetProfileItems(true);
+        }
+
+        if (targets == null || targets.Count <= 0)
+        {
+            return;
+        }
+
+        foreach (var item in targets)
+        {
+            var geo = await GeoIpService.QueryAsync(item.Address);
+            ProfileExManager.Instance.SetGeoInfo(item.IndexId, geo);
+            await Task.Delay(120);
+        }
+
+        await ProfileExManager.Instance.SaveTo();
+        await RefreshServers();
+        NoticeManager.Instance.SendMessageAndEnqueue($"Geo detect completed: {targets.Count} nodes.");
     }
 
     private async Task Export2ClientConfigAsync(bool blClipboard)

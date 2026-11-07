@@ -27,7 +27,14 @@ public class CoreManager
             var toPath = Utils.GetBinPath("");
             if (fromPath != toPath)
             {
-                FileUtils.CopyDirectory(fromPath, toPath, true, false);
+                if (Directory.Exists(fromPath))
+                {
+                    FileUtils.CopyDirectory(fromPath, toPath, true, false);
+                }
+                else
+                {
+                    Logging.SaveLog($"{_tag} init skip copy: source bin directory not found -> {fromPath}");
+                }
             }
         }
 

@@ -10,4 +10,9 @@ public class ProfileExItem
     public decimal Speed { get; set; }
     public int Sort { get; set; }
     public string? Message { get; set; }
+    public string? GeoIP { get; set; }
+    public string? GeoCountry { get; set; }
+    public string? GeoRegion { get; set; }
+    public string? GeoCity { get; set; }
+    public string? GeoIsp { get; set; }
 }
